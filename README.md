@@ -23,9 +23,9 @@ See the **[project/README.md](./project/README.md)** for full methodology, archi
 
 | # | Topic | Notebook | Notes |
 |---|-------|----------|-------|
-| [HW1](./hw1/) | Multimodal Data Preprocessing & Embedding Extraction | [`mmai_HW1.ipynb`](./mmai_HW1.ipynb) | Extracted tabular + note embeddings from BSI dataset using Bio_ClinicalBERT |
-| [HW2](./hw2/) | Alignment Before Fusion & Multimodal Modeling | [`mmai_HW2.ipynb`](./mmai_HW2.ipynb) | Explored align-before-fuse strategies and Platonic Representation Hypothesis |
-| [HW3](./hw3/) | Vision-Language Models & Fine-tuning | [`mmai_HW3.ipynb`](./mmai_HW3.ipynb) | Fine-tuned a VLM; reading on Frozen Language Models and CLIP robustness |
+| [HW1](./hw1/) | Multimodal Data Preprocessing & Embedding Extraction | [`hw1/mmai_HW1.ipynb`](./hw1/mmai_HW1.ipynb) | Extracted tabular + note embeddings from BSI dataset using Bio_ClinicalBERT |
+| [HW2](./hw2/) | Alignment Before Fusion & Multimodal Modeling | [`hw2/mmai_HW2.ipynb`](./hw2/mmai_HW2.ipynb) | Explored align-before-fuse strategies and Platonic Representation Hypothesis |
+| [HW3](./hw3/) | Vision-Language Models & Fine-tuning | [`hw3/mmai_HW3.ipynb`](./hw3/mmai_HW3.ipynb) | Fine-tuned a VLM; reading on Frozen Language Models and CLIP robustness |
 
 ---
 
@@ -36,29 +36,31 @@ See the **[project/README.md](./project/README.md)** for full methodology, archi
 ├── README.md                        ← You are here
 │
 ├── project/
-│   └── README.md                    ← Full project documentation & diagrams
+│   ├── README.md                    ← Full project documentation & diagrams
+│   │
+│   │── Notebooks ───────────────────────────────────────────────────────────────
+│   ├── data_cleaning_labeling.ipynb ← SQL extraction, cohort building, labeling
+│   ├── extract_features.ipynb       ← Vitals, ICD, medications, chief complaints
+│   ├── finetune_bsi.ipynb           ← Clinical Longformer fine-tuning on BSI
+│   ├── fusion.ipynb                 ← Embedding fusion pipeline
+│   ├── postprocess.ipynb            ← Embedding postprocessing & dataset merging
+│   │
+│   │── Scripts ─────────────────────────────────────────────────────────────────
+│   ├── generate_embeddings.py       ← Bio_ClinicalBERT chunked embedding generation
+│   ├── notes_truncation.py          ← Risk-factor-aware note filtering (experimental; did not improve results)
+│   ├── model_battery.py             ← Multi-model experiment runner (LR/MLP/XGB)
+│   ├── model_battery_bsi.py         ← BSI model battery (XGB, TabNet, stacking; results so far use XGB only)
+│   └── models.py                    ← Model definitions and hyperparameter search
 │
-├── hw1/README.md                    ← HW1: preprocessing & modality extraction
-├── hw2/README.md                    ← HW2: alignment, fusion, and modeling
-├── hw3/README.md                    ← HW3: vision-language models
-│
-├── mmai_HW1.ipynb                   ← HW1 notebook
-├── mmai_HW2.ipynb                   ← HW2 notebook
-├── mmai_HW3.ipynb                   ← HW3 notebook
-│
-│── Project notebooks ──────────────────────────────────────────────────────────
-├── data_cleaning_labeling.ipynb     ← SQL extraction, cohort building, labeling
-├── extract_features.ipynb           ← Vitals, ICD, medications, chief complaints
-├── finetune_bsi.ipynb               ← Clinical Longformer fine-tuning on BSI
-├── fusion.ipynb                     ← Note truncation + embedding fusion pipeline
-├── postprocess.ipynb                ← Embedding postprocessing & dataset merging
-│
-│── Project scripts ─────────────────────────────────────────────────────────────
-├── generate_embeddings.py           ← Bio_ClinicalBERT chunked embedding generation
-├── notes_truncation.py              ← Risk-factor-aware clinical note filtering
-├── model_battery.py                 ← Multi-model experiment runner (LR/MLP/XGB)
-├── model_battery_bsi.py             ← BSI model battery (XGB, TabNet, stacking)
-└── models.py                        ← Model definitions and hyperparameter search
+├── hw1/
+│   ├── README.md                    ← HW1: preprocessing & modality extraction
+│   └── mmai_HW1.ipynb
+├── hw2/
+│   ├── README.md                    ← HW2: alignment, fusion, and modeling
+│   └── mmai_HW2.ipynb
+└── hw3/
+    ├── README.md                    ← HW3: vision-language models
+    └── mmai_HW3.ipynb
 ```
 
 ---
@@ -66,8 +68,8 @@ See the **[project/README.md](./project/README.md)** for full methodology, archi
 ## Quick Links
 
 - [Project README with architecture diagrams](./project/README.md)
-- [Data pipeline](./data_cleaning_labeling.ipynb)
-- [Feature engineering](./extract_features.ipynb)
-- [Text embedding pipeline](./generate_embeddings.py)
-- [Multimodal fusion](./fusion.ipynb)
-- [Model experiments](./model_battery.py)
+- [Data pipeline](./project/data_cleaning_labeling.ipynb)
+- [Feature engineering](./project/extract_features.ipynb)
+- [Text embedding pipeline](./project/generate_embeddings.py)
+- [Multimodal fusion](./project/fusion.ipynb)
+- [Model experiments](./project/model_battery.py)

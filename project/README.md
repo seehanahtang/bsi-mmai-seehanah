@@ -64,8 +64,7 @@ flowchart TD
     end
 
     subgraph TextPipeline["Text Processing Pipeline"]
-        NOTES --> TRUNC[Risk-Factor-Aware\nNote Truncation\nnotes_truncation.py]
-        TRUNC --> BERT[Bio_ClinicalBERT\nor Clinical Longformer]
+        NOTES --> BERT[Bio_ClinicalBERT\nor Clinical Longformer]
         BERT --> EMB[768-dim Note Embeddings]
         NOTES --> LLM[LLM Risk Factor\nExtraction]
         LLM --> RISK[34 Binary Risk Flags]
@@ -102,7 +101,7 @@ flowchart TD
 flowchart LR
     A[data_cleaning_labeling.ipynb\nSQL extraction & labeling] -->
     B[extract_features.ipynb\nVitals, ICD, Meds, Labs] -->
-    C[fusion.ipynb\nNote truncation + BERT embeddings] -->
+    C[fusion.ipynb\nBERT embeddings + fusion] -->
     D[postprocess.ipynb\nMerge tabular + embeddings] -->
     E[model_battery_bsi.py\nTrain & evaluate models]
 
@@ -163,7 +162,9 @@ Apply the xHAIM framework (Petridis et al., 2026) to generate:
 
 ### Risk-Factor-Aware Note Truncation (`notes_truncation.py`)
 
-Rather than naively truncating notes at a token limit, we filter notes to sentences relevant to BSI risk:
+> **Note:** This approach was implemented and tested but did not improve model performance over standard chunked embedding and was not used in final experiments.
+
+Rather than naively truncating notes at a token limit, we attempted to filter notes to sentences relevant to BSI risk:
 
 - **34 clinical risk factors** defined (e.g., immunocompromised state, central line, fever, altered mental status)
 - **160+ relevance keywords** covering conditions, devices, vitals, exposures, and clinical suspicion phrases
@@ -177,6 +178,8 @@ Filtered to BSI-relevant sentences (~200–500 words)
          ↓  Bio_ClinicalBERT / Clinical Longformer
 768-dimensional embedding
 ```
+
+Despite filtering to clinically relevant content, this truncation strategy did not yield performance gains over mean-pooled embeddings from the full (chunked) notes.
 
 ### Bio_ClinicalBERT Embedding (`generate_embeddings.py`)
 
@@ -210,14 +213,14 @@ Bayesian hyperparameter search (`BayesSearchCV`, 10 iterations, 3-fold CV):
 
 Class imbalance handled via `compute_sample_weight(class_weight='balanced')`.
 
-### TabNet
+### TabNet *(implemented, not yet in reported results)*
 
 Attentive transformer-based tabular model with:
 - Categorical column handling for ICD/medication flags
 - 5-fold CV to determine optimal training epochs (early stopping patience = 20)
 - Balanced class weights (`weights=1`)
 
-### Stacking Ensemble
+### Stacking Ensemble *(implemented, not yet in reported results)*
 
 Meta-learner: `GradientBoostingClassifier`
 Base models: Random Forest + XGBoost + AdaBoost
@@ -265,7 +268,7 @@ Base models: Random Forest + XGBoost + AdaBoost
 | `data_cleaning_labeling.ipynb` | SQL extraction from Hartford Healthcare, cohort construction, blood culture labeling (positive/negative/false-positive logic) |
 | `extract_features.ipynb` | Structured feature extraction: vitals, ICD-10, medications, chief complaints, labs, demographic aggregation |
 | `generate_embeddings.py` | Bio_ClinicalBERT embedding generation with chunked tokenization and mean pooling |
-| `notes_truncation.py` | Risk-factor-aware clinical note filtering utility |
+| `notes_truncation.py` | Risk-factor-aware clinical note filtering utility (experimental; did not improve results) |
 | `finetune_bsi.ipynb` | Clinical Longformer fine-tuning for BSI classification and embedding extraction |
 | `fusion.ipynb` | Note truncation → embedding pipeline; merges text embeddings with tabular features |
 | `postprocess.ipynb` | Final dataset merging and preprocessing before model training |
