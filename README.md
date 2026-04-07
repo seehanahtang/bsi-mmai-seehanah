@@ -71,8 +71,7 @@ See the **[project/README.md](./project/README.md)** for full methodology, archi
 ## Quick Links
 
 - [Project README with architecture diagrams](./project/README.md)
-- [Data pipeline](./project/data_cleaning_labeling.ipynb)
-- [Feature engineering](./project/extract_features.ipynb)
-- [Text embedding pipeline](./project/generate_embeddings.py)
-- [Multimodal fusion](./project/fusion.ipynb)
-- [Model experiments](./project/model_battery.py)
+- [Data pipeline](./project/preprocessing/data_cleaning_labeling.ipynb)
+- [Feature engineering](./project/preprocessing/extract_features.ipynb)
+- [Text embedding pipeline](./project/encode_notes/generate_embeddings.py)
+- [Model experiments](./project/prediction/model_battery.py)
