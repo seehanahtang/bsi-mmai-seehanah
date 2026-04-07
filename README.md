@@ -6,7 +6,7 @@
 **Affiliation:** Operations Research Center, MIT
 
 ## Bio
-<img src="./imgs/profile.png" style="width:200px;">
+<img src="./images/profile.png" style="width:200px;">
 
 Hey! I am a first-year PhD student at the MIT [Operations Research Center](https://orc.mit.edu) advised by Professor [Dimitris Bertsimas](https://www.dbertsim.mit.edu). My research sits at the intersection of optimization, machine learning, and healthcare, with a focus on building data-driven tools that meaningfully improve patient outcomes and clinical operations. Outside of research, I play flute in the MIT Symphony Orchestra, am an avid traveler, and enjoy strategy card games.
 
@@ -41,18 +41,20 @@ See the **[project/README.md](./project/README.md)** for full methodology, archi
 ├── project/
 │   ├── README.md                    ← Full project documentation & diagrams
 │   │
-│   │── Notebooks ───────────────────────────────────────────────────────────────
+│   │── Preprocessing ───────────────────────────────────────────────────────────
 │   ├── data_cleaning_labeling.ipynb ← SQL extraction, cohort building, labeling
 │   ├── extract_features.ipynb       ← Vitals, ICD, medications, chief complaints
-│   ├── finetune_bsi.ipynb           ← Clinical Longformer fine-tuning on BSI
-│   ├── fusion.ipynb                 ← Embedding fusion pipeline
 │   ├── postprocess.ipynb            ← Embedding postprocessing & dataset merging
 │   │
-│   │── Scripts ─────────────────────────────────────────────────────────────────
+│   │── Encoding Clinical Notes ─────────────────────────────────────────────────
 │   ├── generate_embeddings.py       ← Bio_ClinicalBERT chunked embedding generation
+│   ├── finetune_bsi.ipynb           ← Clinical Longformer fine-tuning on BSI
 │   ├── notes_truncation.py          ← Risk-factor-aware note filtering (experimental; did not improve results)
+│   ├── notes_summarization.py       ← BSI task specific note summarization
+│   ├── extract_risk_factors.py      ← Risk factor extraction using LLM
+│   │
+│   │── Prediction ───────────────────────────────────────────────────────────────
 │   ├── model_battery.py             ← Multi-model experiment runner (LR/MLP/XGB)
-│   ├── model_battery_bsi.py         ← BSI model battery (XGB, TabNet, stacking; results so far use XGB only)
 │   └── models.py                    ← Model definitions and hyperparameter search
 │
 ├── hw1/
