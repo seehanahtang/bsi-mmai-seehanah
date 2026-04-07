@@ -52,7 +52,7 @@ See the **[project/README.md](./project/README.md)** for full methodology, archi
 │   ├── notes_truncation.py          ← Risk-factor-aware note filtering (experimental; did not improve results)
 │   ├── notes_summarization.py       ← BSI task specific note summarization
 │   ├── extract_risk_factors.py      ← Risk factor extraction using LLM
-│
+│   │
 │   │── Prediction ───────────────────────────────────────────────────────────────
 │   ├── model_battery.py             ← Multi-model experiment runner (LR/MLP/XGB)
 │   └── models.py                    ← Model definitions and hyperparameter search
