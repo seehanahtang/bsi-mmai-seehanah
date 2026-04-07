@@ -6,7 +6,7 @@
 **Affiliation:** Operations Research Center, MIT
 
 ## Bio
-<img src="./imgs/profile.png" style="width:200px;">
+<img src="./images/profile.png" style="width:200px;">
 
 Hey! I am a first-year PhD student at the MIT [Operations Research Center](https://orc.mit.edu) advised by Professor [Dimitris Bertsimas](https://www.dbertsim.mit.edu). My research sits at the intersection of optimization, machine learning, and healthcare, with a focus on building data-driven tools that meaningfully improve patient outcomes and clinical operations. Outside of research, I play flute in the MIT Symphony Orchestra, am an avid traveler, and enjoy strategy card games.
 
