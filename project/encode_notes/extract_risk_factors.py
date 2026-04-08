@@ -64,6 +64,48 @@ DEFAULT_OUT   = SCRIPT_DIR / "data"
 
 STOP_TOKEN = "<<<END>>>"
 
+# ── Risk factor vocabulary ────────────────────────────────────────────────────
+
+RISK_FACTORS = [
+    "IMMUNOCOMPROMISED STATE",
+    "POST TRANSPLANT STATUS",
+    "HIV",
+    "ACTIVE CHEMOTHERAPY",
+    "NEUTROPENIA",
+    "LONG TERM STEROID OR IMMUNOMODULATOR USE",
+    "CHRONIC HEMODIALYSIS",
+    "LIVER CIRRHOSIS OR FAILURE",
+    "DIABETES MELLITUS",
+    "CHRONIC KIDNEY DISEASE",
+    "CHRONIC LUNG DISEASE",
+    "MALNUTRITION",
+    "AGE OVER 65",
+    "CENTRAL LINE OR PICC",
+    "FOLEY CATHETER",
+    "SURGICAL OR PERCUTANEOUS DRAINS",
+    "IMPLANTED HARDWARE",
+    "RECENT SURGERY",
+    "HEART VALVE DISEASE OR PROSTHETIC VALVE",
+    "RECENT DENTAL PROCEDURE OR DENTAL INFECTION",
+    "SKIN BREAKDOWN OR OPEN WOUND",
+    "MUCOSAL BREAKDOWN",
+    "GASTROINTESTINAL ISCHEMIA OR INFECTION",
+    "GALLBLADDER OR KIDNEY STONES WITH OBSTRUCTION",
+    "FEVER",
+    "HYPOTENSION",
+    "TACHYCARDIA",
+    "ELEVATED LACTATE",
+    "ALTERED MENTAL STATUS",
+    "INTRAVENOUS DRUG USE",
+    "TOTAL PARENTERAL NUTRITION",
+    "RECENT HEALTHCARE EXPOSURE",
+    "RECENT TRAVEL",
+    "INFECTIOUS EXPOSURE RISK",
+    "PREVIOUS INFECTION",
+]
+
+RISK_FACTOR_SET = set(RISK_FACTORS)
+
 # ── Column definitions (mirrors predict_bsi.py) ───────────────────────────────
 
 VITALS_COLS = ["Temp", "SpO2", "Pulse", "Resp",
@@ -184,89 +226,74 @@ def build_patient_text(row: pd.Series, include_notes: bool = True) -> str:
 
 # ── Prompt ────────────────────────────────────────────────────────────────────
 
-_FEW_SHOT_EXAMPLE = """\
-EXAMPLE PATIENT:
-=== STRUCTURED DATA ===
-Vitals: Temperature: 38.9; Heart rate: 118; SpO2: 94; Resp rate: 22; High fever flag: 1.0; High pulse flag: 1.0.
-Laboratory values: WBC: 18.4; Lactate: 3.2; Creatinine: 1.8; ANC: 16.2; Platelets: 88.
-Past/active diagnoses (ICD-coded): end stage renal disease, type 2 diabetes mellitus.
-Chief complaints: fever, altered mental status.
-Medications: insulin, erythropoietin, phosphate binders.
-
-=== CLINICAL NOTES ===
-68 yo M on chronic HD presenting with fever to 38.9 and altered mental status. Has tunneled HD catheter in R IJ placed 3 months ago. Blood cultures drawn — two sets sent. History of prior MRSA bacteremia 1 year ago.
-
-EXAMPLE OUTPUT:
-{
-  "risk_factors_tabular": [
-    "fever (temperature 38.9°C, high fever flag positive)",
-    "tachycardia (heart rate 118, high pulse flag positive)",
-    "mild hypoxemia (SpO2 94%)",
-    "leukocytosis (WBC 18.4)",
-    "elevated lactate (3.2 — tissue hypoperfusion)",
-    "thrombocytopenia (platelets 88)",
-    "elevated creatinine (1.8 — renal insufficiency)",
-    "end-stage renal disease (ICD diagnosis — immunocompromise, vascular access dependence)",
-    "type 2 diabetes mellitus (ICD diagnosis — impaired host defences)",
-    "altered mental status (chief complaint — possible sepsis encephalopathy)"
-  ],
-  "risk_factors_notes": [
-    "tunneled HD catheter right internal jugular placed 3 months ago — intravascular device, portal of entry",
-    "prior MRSA bacteremia 1 year ago — elevated recurrence risk",
-    "blood cultures drawn — clinician concern for BSI documented"
-  ],
-  "risk_factors_all": [
-    "fever and tachycardia (systemic inflammatory response)",
-    "leukocytosis with elevated lactate (early sepsis markers)",
-    "thrombocytopenia (possible consumptive process)",
-    "ESRD and diabetes (underlying immunocompromise)",
-    "tunneled hemodialysis catheter (intravascular device — portal of entry)",
-    "prior MRSA bacteremia (recurrence risk)",
-    "altered mental status (possible sepsis encephalopathy)"
-  ],
-  "risk_summary": "This patient has multiple convergent BSI risk factors. Structured data reveals a systemic inflammatory response (fever, tachycardia, leukocytosis) with early sepsis markers (elevated lactate, thrombocytopenia) and immunocompromising comorbidities (ESRD, T2DM). Clinical notes add a critical device-related risk: a tunneled HD catheter as a likely portal of entry, compounded by a documented prior MRSA bacteremia that significantly elevates recurrence probability. Overall risk profile is high."
-}
-<<<END>>>"""
-
-
 def build_extraction_prompt(patient_text: str) -> str:
     """
-    Chain-of-thought prompt instructing the model to separately enumerate
-    risk factors from structured tabular data and from clinical notes.
+    Vocabulary-constrained prompt that maps each detected risk factor to 0/1
+    in a structured evidence JSON, drawing from both structured data and notes.
     """
-    return f"""You are an expert infectious disease clinician. Your task is to extract all clinical risk factors for blood stream infection (BSI/bacteremia) from a patient's record.
+    vocab_block = "\n".join(f"  - {rf}" for rf in RISK_FACTORS)
 
-The patient record is divided into two clearly labelled sections:
-  1. STRUCTURED DATA — vitals, lab values, coded ICD diagnoses, chief complaints, medications.
-  2. CLINICAL NOTES — free-text nursing/physician documentation.
+    return f"""You are a clinical information extraction system.
 
-You must extract risk factors from EACH section separately, then produce a combined list and a brief narrative summary.
+Your task is to extract BSI (blood stream infection) risk factors from the PATIENT RECORD below.
+The record contains two sections: STRUCTURED DATA (vitals, labs, diagnoses, medications) and CLINICAL NOTES (free-text).
 
-{_FEW_SHOT_EXAMPLE}
+OUTPUT FORMAT (STRICT):
+Return ONLY valid JSON with exactly ONE top-level key: "evidence".
+- Keys MUST be risk factor labels (UPPERCASE) drawn from the VOCABULARY below.
+- Values: 1 = present or affirmed, 0 = explicitly denied or negated.
+- Only include risk factors that are explicitly mentioned or clearly implied by the data.
+- If nothing matches, return: {{"evidence": {{}}}}
 
---------------------------------------------------
+After the closing }} you MUST output {STOP_TOKEN} and STOP generating.
 
-NOW EVALUATE THIS PATIENT:
+VOCABULARY (use ONLY these labels as keys):
+{vocab_block}
 
-{patient_text}
+RULES:
+1. Extract risk factors from BOTH the structured data and the clinical notes sections.
+2. Abnormal vitals/labs imply specific risk factors (e.g. high fever flag → "FEVER": 1, lactate > 2 → "ELEVATED LACTATE": 1, tachycardia → "TACHYCARDIA": 1).
+3. ICD diagnoses, medications, and chief complaints should be mapped to matching vocabulary terms.
+4. Absence of mention ≠ denial. Do NOT include risk factors that are simply not discussed.
+5. If a risk factor is both affirmed and denied, output 1.
+6. Do NOT infer beyond what the data supports.
+7. Do NOT output anything except the JSON object followed by {STOP_TOKEN}.
 
---------------------------------------------------
+EXAMPLE:
 
-INSTRUCTIONS — follow these steps in order:
-Step 1: List up to 10 BSI risk factors found ONLY in the STRUCTURED DATA section (abnormal vitals, lab derangements, immunocompromising diagnoses, high-risk medications, relevant chief complaints). Be specific — include the actual value or ICD term.
-Step 2: List up to 10 BSI risk factors found ONLY in the CLINICAL NOTES section (intravascular devices, procedures, microbiological history, clinical context not captured in structured fields).
-Step 3: Produce a deduplicated combined list of the most important risk factors (up to 10 items).
-Step 4: Write 2–4 sentences summarising the patient's overall BSI risk profile, noting which source (structured data vs notes) contributed the most informative risk factors.
+PATIENT RECORD:
+=== STRUCTURED DATA ===
+Vitals: Temperature: 38.9; Heart rate: 118; High fever flag: 1.0; High pulse flag: 1.0.
+Laboratory values: WBC: 18.4; Lactate: 3.2; Creatinine: 1.8; ANC: 0.8.
+Past/active diagnoses (ICD-coded): end stage renal disease, type 2 diabetes mellitus.
+Chief complaints: fever, altered mental status.
 
-OUTPUT FORMAT — return ONLY valid JSON followed immediately by {STOP_TOKEN}. No text before or after.
+=== CLINICAL NOTES ===
+68 yo M on chronic HD presenting with fever and altered mental status. Has tunneled HD catheter in R IJ. History of prior MRSA bacteremia 1 year ago.
 
+OUTPUT:
 {{
-  "risk_factors_tabular": ["finding1 (value/context)", "finding2"],
-  "risk_factors_notes": ["finding1", "finding2"],
-  "risk_factors_all": ["top finding1", "top finding2"],
-  "risk_summary": "Narrative summary here."
+  "evidence": {{
+    "FEVER": 1,
+    "TACHYCARDIA": 1,
+    "ELEVATED LACTATE": 1,
+    "NEUTROPENIA": 1,
+    "CHRONIC HEMODIALYSIS": 1,
+    "CHRONIC KIDNEY DISEASE": 1,
+    "DIABETES MELLITUS": 1,
+    "ALTERED MENTAL STATUS": 1,
+    "CENTRAL LINE OR PICC": 1,
+    "PREVIOUS INFECTION": 1
+  }}
 }}
 {STOP_TOKEN}
+
+--------------------------------------------------
+
+PATIENT RECORD:
+<<<
+{patient_text}
+>>>
 
 OUTPUT:
 """
@@ -290,43 +317,48 @@ class ExtractionGenerationConfig:
     stop_sequences: List[str] = field(default_factory=lambda: [
         STOP_TOKEN,
         "<<<END>>>",
-        "NOW EVALUATE THIS PATIENT:",
+        "PATIENT RECORD:",
+        "STOP.",
     ])
 
 
 # ── JSON parsing ──────────────────────────────────────────────────────────────
 
-def parse_extraction_json(raw: str) -> Dict:
-    """
-    Parse LLM output into a validated risk-factor extraction dict.
+def parse_evidence_json(raw: str) -> Dict[str, int]:
+    """Parse LLM output into a validated evidence dict.
 
-    Expected keys: risk_factors_tabular (list), risk_factors_notes (list),
-                   risk_factors_all (list), risk_summary (str).
-
-    Falls back to partial extraction on parse failure.
+    Tries several strategies to recover valid JSON from potentially
+    noisy LLM output, including repairing truncated JSON where the
+    output was cut off by max_new_tokens. Returns the evidence dict
+    or raises ValueError.
     """
     cleaned = raw.strip().replace(STOP_TOKEN, "").strip()
 
     for text in [cleaned, _fix_common_json_issues(cleaned)]:
         try:
             obj = json.loads(text)
-            return _validate_extraction(obj)
-        except (json.JSONDecodeError, ValueError):
+            if isinstance(obj, dict) and "evidence" in obj:
+                return _validate_evidence(obj["evidence"])
+        except json.JSONDecodeError:
             pass
 
         match = re.search(r"\{[\s\S]*\}", text)
         if match:
             try:
                 obj = json.loads(match.group())
-                return _validate_extraction(obj)
-            except (json.JSONDecodeError, ValueError):
+                if isinstance(obj, dict) and "evidence" in obj:
+                    return _validate_evidence(obj["evidence"])
+                if isinstance(obj, dict) and all(isinstance(v, (int, float)) for v in obj.values()):
+                    return _validate_evidence(obj)
+            except json.JSONDecodeError:
                 pass
 
-    partial = _recover_extraction_fields(cleaned)
-    if partial is not None:
-        return partial
+    # Last resort: repair truncated JSON (output cut off by max_new_tokens)
+    repaired = _repair_truncated_json(cleaned)
+    if repaired is not None:
+        return _validate_evidence(repaired)
 
-    raise ValueError(f"Could not parse extraction JSON: {raw[:300]}")
+    raise ValueError(f"Could not parse evidence JSON from model output: {raw[:200]}")
 
 
 def _fix_common_json_issues(text: str) -> str:
@@ -335,48 +367,25 @@ def _fix_common_json_issues(text: str) -> str:
     return fixed
 
 
-def _validate_extraction(obj: dict) -> Dict:
-    if not isinstance(obj, dict):
-        raise ValueError("Not a dict")
-    return {
-        "risk_factors_tabular": _coerce_list(obj.get("risk_factors_tabular")),
-        "risk_factors_notes":   _coerce_list(obj.get("risk_factors_notes")),
-        "risk_factors_all":     _coerce_list(obj.get("risk_factors_all")),
-        "risk_summary":         str(obj.get("risk_summary", "")),
-    }
+def _repair_truncated_json(text: str) -> Optional[Dict[str, int]]:
+    """Attempt to recover key-value pairs from truncated JSON output."""
+    pairs = re.findall(r'"([^"]+)"\s*:\s*(0|1)\b', text)
+    if not pairs:
+        return None
+    evidence = {}
+    for key, val in pairs:
+        evidence[key.strip().upper()] = int(val)
+    return evidence
 
 
-def _coerce_list(val) -> List[str]:
-    if isinstance(val, list):
-        return [str(v) for v in val]
-    if isinstance(val, str):
-        return [val] if val else []
-    return []
-
-
-def _recover_extraction_fields(text: str) -> Optional[Dict]:
-    """Last-resort: pull out whatever lists and summary text we can find."""
-    def extract_list(key: str) -> List[str]:
-        m = re.search(rf'"{key}"\s*:\s*\[([^\]]*)\]', text, re.DOTALL)
-        if not m:
-            return []
-        items = re.findall(r'"([^"]+)"', m.group(1))
-        return items
-
-    tabular = extract_list("risk_factors_tabular")
-    notes   = extract_list("risk_factors_notes")
-    all_rf  = extract_list("risk_factors_all")
-    summary_m = re.search(r'"risk_summary"\s*:\s*"([^"]*)"', text)
-    summary = summary_m.group(1) if summary_m else ""
-
-    if tabular or notes or all_rf:
-        return {
-            "risk_factors_tabular": tabular,
-            "risk_factors_notes":   notes,
-            "risk_factors_all":     all_rf,
-            "risk_summary":         summary,
-        }
-    return None
+def _validate_evidence(evidence: dict) -> Dict[str, int]:
+    """Filter evidence to only valid risk factors with int values."""
+    validated = {}
+    for key, val in evidence.items():
+        key_upper = key.strip().upper()
+        if key_upper in RISK_FACTOR_SET:
+            validated[key_upper] = int(val) if val in (0, 1, 0.0, 1.0) else 1
+    return validated
 
 
 # ── Text generation ───────────────────────────────────────────────────────────
@@ -393,10 +402,10 @@ def generate_extraction(
     from transformers import TextIteratorStreamer
 
     # Truncate notes to fit context window.
-    # Prompt overhead (instructions + example) is ~1100 tokens.
+    # Prompt overhead (instructions + vocabulary + example) is ~900 tokens.
     truncated_text = truncate_notes_to_fit(
         patient_text, tokenizer, context_length,
-        prompt_overhead_tokens=1100,
+        prompt_overhead_tokens=900,
         max_new_tokens=gen_config.max_new_tokens,
     )
 
@@ -438,7 +447,15 @@ def generate_extraction(
         )
         gen_kwargs["streamer"] = streamer
 
-        thread = Thread(target=model.generate, kwargs=gen_kwargs)
+        thread_exception = [None]
+
+        def _run_generate():
+            try:
+                model.generate(**gen_kwargs)
+            except Exception as e:
+                thread_exception[0] = e
+
+        thread = Thread(target=_run_generate)
         thread.start()
 
         generated = ""
@@ -451,6 +468,8 @@ def generate_extraction(
         thread.join()
         if gen_config.verbose:
             print()
+        if thread_exception[0] is not None:
+            raise thread_exception[0]
     else:
         with torch.no_grad():
             outputs = model.generate(**gen_kwargs)
@@ -466,8 +485,7 @@ def generate_extraction(
 
 OUTPUT_COLUMNS = [
     "primarymrn", "EncounterKey", "Positive", "dataset_source",
-    "risk_factors_tabular", "risk_factors_notes", "risk_factors_all",
-    "risk_summary", "parse_success", "notes_length", "model",
+    "evidence_json", "parse_success", "notes_length", "model",
 ]
 
 
@@ -544,17 +562,14 @@ def run_inference(
 
         if dry_run:
             buffer.append({
-                "primarymrn":          mrn,
-                "EncounterKey":        encounter_key,
-                "Positive":            label,
-                "dataset_source":      dataset_source,
-                "risk_factors_tabular": "[]",
-                "risk_factors_notes":  "[]",
-                "risk_factors_all":    "[]",
-                "risk_summary":        "[DRY RUN]",
-                "parse_success":       True,
-                "notes_length":        notes_length,
-                "model":               model_name,
+                "primarymrn":     mrn,
+                "EncounterKey":   encounter_key,
+                "Positive":       label,
+                "dataset_source": dataset_source,
+                "evidence_json":  json.dumps({}),
+                "parse_success":  True,
+                "notes_length":   notes_length,
+                "model":          model_name,
             })
             done_encounters.add(encounter_key)
             if len(buffer) >= save_every:
@@ -568,63 +583,50 @@ def run_inference(
             )
 
             try:
-                result = parse_extraction_json(raw_output)
+                evidence = parse_evidence_json(raw_output)
+                evidence_str = json.dumps(evidence)
                 parse_success = True
             except ValueError as e:
                 logger.warning(f"Parse failure for {encounter_key}: {e}")
-                result = {
-                    "risk_factors_tabular": [],
-                    "risk_factors_notes":   [],
-                    "risk_factors_all":     [],
-                    "risk_summary":         raw_output.replace(STOP_TOKEN, "").strip(),
-                }
+                evidence_str = raw_output.replace(STOP_TOKEN, "").strip()
                 parse_success = False
                 parse_failures += 1
 
             buffer.append({
-                "primarymrn":          mrn,
-                "EncounterKey":        encounter_key,
-                "Positive":            label,
-                "dataset_source":      dataset_source,
-                "risk_factors_tabular": json.dumps(result["risk_factors_tabular"]),
-                "risk_factors_notes":  json.dumps(result["risk_factors_notes"]),
-                "risk_factors_all":    json.dumps(result["risk_factors_all"]),
-                "risk_summary":        result["risk_summary"],
-                "parse_success":       parse_success,
-                "notes_length":        notes_length,
-                "model":               model_name,
+                "primarymrn":     mrn,
+                "EncounterKey":   encounter_key,
+                "Positive":       label,
+                "dataset_source": dataset_source,
+                "evidence_json":  evidence_str,
+                "parse_success":  parse_success,
+                "notes_length":   notes_length,
+                "model":          model_name,
             })
 
         except torch.cuda.OutOfMemoryError:
             logger.error(f"OOM for encounter {encounter_key} (notes_len={notes_length}). Skipping.")
             torch.cuda.empty_cache()
             buffer.append({
-                "primarymrn":          mrn,
-                "EncounterKey":        encounter_key,
-                "Positive":            label,
-                "dataset_source":      dataset_source,
-                "risk_factors_tabular": "[]",
-                "risk_factors_notes":  "[]",
-                "risk_factors_all":    "[]",
-                "risk_summary":        "ERROR: OOM",
-                "parse_success":       False,
-                "notes_length":        notes_length,
-                "model":               model_name,
+                "primarymrn":     mrn,
+                "EncounterKey":   encounter_key,
+                "Positive":       label,
+                "dataset_source": dataset_source,
+                "evidence_json":  "ERROR: OOM",
+                "parse_success":  False,
+                "notes_length":   notes_length,
+                "model":          model_name,
             })
         except Exception as e:
             logger.error(f"Error for encounter {encounter_key}: {e}")
             buffer.append({
-                "primarymrn":          mrn,
-                "EncounterKey":        encounter_key,
-                "Positive":            label,
-                "dataset_source":      dataset_source,
-                "risk_factors_tabular": "[]",
-                "risk_factors_notes":  "[]",
-                "risk_factors_all":    "[]",
-                "risk_summary":        f"ERROR: {e}",
-                "parse_success":       False,
-                "notes_length":        notes_length,
-                "model":               model_name,
+                "primarymrn":     mrn,
+                "EncounterKey":   encounter_key,
+                "Positive":       label,
+                "dataset_source": dataset_source,
+                "evidence_json":  f"ERROR: {e}",
+                "parse_success":  False,
+                "notes_length":   notes_length,
+                "model":          model_name,
             })
 
         done_encounters.add(encounter_key)
